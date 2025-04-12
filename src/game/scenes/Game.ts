@@ -1,36 +1,96 @@
-import { EventBus } from '../EventBus';
-import { Scene } from 'phaser';
+import Phaser from "phaser";
 
-export class Game extends Scene
-{
-    camera: Phaser.Cameras.Scene2D.Camera;
-    background: Phaser.GameObjects.Image;
-    gameText: Phaser.GameObjects.Text;
-
-    constructor ()
-    {
-        super('Game');
+export class Game extends Phaser.Scene {
+    private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+    private penguin?: Phaser.Physics.Matter.Sprite;
+    private isTouchingGround: boolean = false;
+    constructor() {
+        super("game");
     }
 
-    create ()
-    {
-        this.camera = this.cameras.main;
-        this.camera.setBackgroundColor(0x00ff00);
-
-        this.background = this.add.image(512, 384, 'background');
-        this.background.setAlpha(0.5);
-
-        this.gameText = this.add.text(512, 384, 'Make something fun!\nand share it with us:\nsupport@phaser.io', {
-            fontFamily: 'Arial Black', fontSize: 38, color: '#ffffff',
-            stroke: '#000000', strokeThickness: 8,
-            align: 'center'
-        }).setOrigin(0.5).setDepth(100);
-
-        EventBus.emit('current-scene-ready', this);
+    init() {
+        this.cursors = this.input.keyboard!.createCursorKeys();
     }
 
-    changeScene ()
-    {
-        this.scene.start('GameOver');
+    preload() {
+        this.load.atlas("penguin", "assets/penguin.png", "assets/penguin.json");
+        this.load.image("tiles", "assets/sheet.png");
+        this.load.tilemapTiledJSON("tilemap", "assets/game.json");
+    }
+
+    create() {
+        this.createPenguinAnimations();
+        const map = this.make.tilemap({ key: "tilemap" });
+        const tileset = map.addTilesetImage("iceworld", "tiles");
+        const ground = map.createLayer("ground", tileset!);
+        ground?.setCollisionByProperty({ collides: true });
+
+        const objectsLayer = map.getObjectLayer("objects");
+        objectsLayer?.objects.forEach((objData) => {
+            const { x = 0, y = 0, width = 0, name } = objData;
+            switch (name) {
+                case "penguin-spawn":
+                    this.penguin = this.matter.add
+                        .sprite(x + width * 0.5, y, "penguin")
+                        .play("player-idle")
+                        .setFixedRotation();
+
+                    this.penguin.setOnCollide(() => {
+                        this.isTouchingGround = true;
+                    });
+                    this.cameras.main.startFollow(this.penguin);
+                    break;
+            }
+        });
+
+        this.matter.world.convertTilemapLayer(ground!);
+    }
+
+    update() {
+        if (!this.penguin) {
+            return;
+        }
+        const speed = 10;
+        if (this.cursors.left.isDown) {
+            this.penguin.setVelocityX(-speed);
+            this.penguin.play("player-walk", true);
+            this.penguin.flipX = true;
+        } else if (this.cursors.right.isDown) {
+            this.penguin.setVelocityX(speed);
+            this.penguin.play("player-walk", true);
+            this.penguin.flipX = false;
+        } else {
+            this.penguin.setVelocityX(0);
+            this.penguin.play("player-idle", true);
+        }
+
+        const spaceJustPressed = Phaser.Input.Keyboard.JustDown(
+            this.cursors.space
+        );
+
+        if (spaceJustPressed && this.isTouchingGround) {
+            this.penguin.setVelocityY(-15);
+            this.isTouchingGround = false;
+        }
+    }
+
+    private createPenguinAnimations() {
+        this.anims.create({
+            key: "player-idle",
+            frames: [{ key: "penguin", frame: "penguin_walk01.png" }],
+        });
+
+        this.anims.create({
+            key: "player-walk",
+            frameRate: 10,
+            frames: this.anims.generateFrameNames("penguin", {
+                start: 1,
+                end: 4,
+                prefix: "penguin_walk0",
+                suffix: ".png",
+            }),
+            repeat: -1,
+        });
     }
 }
+
