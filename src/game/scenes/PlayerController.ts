@@ -22,17 +22,34 @@ export class PlayerController {
             .setState("idle");
 
         this.jumpingStateMachine = new StateMachine(this, "player-jump")
-            .addState("jump-idle", {
+            .addState("idle", {
                 onUpdate: this.jumpIdleOnUpdate,
             })
             .addState("jump", {
                 onEnter: this.jumpOnEnter,
             })
-            .setState("jump-idle");
+            .setState("idle");
 
-        this.sprite.setOnCollide(() => {
-            if (this.jumpingStateMachine.isCurrentState("jump")) {
-                this.jumpingStateMachine.setState("jump-idle");
+        this.sprite.setOnCollide((data: MatterJS.ICollisionPair) => {
+            const body = data.bodyB as MatterJS.BodyType;
+            const gameObject = body.gameObject;
+
+            if (!gameObject) {
+                return;
+            }
+
+            if (gameObject instanceof Phaser.Physics.Matter.TileBody) {
+                if (this.jumpingStateMachine.isCurrentState("jump")) {
+                    this.jumpingStateMachine.setState("idle");
+                }
+
+                return;
+            }
+
+            const sprite = gameObject as Phaser.Physics.Matter.Sprite;
+            const type = sprite.getData("type");
+            if (type === "star") {
+                sprite.destroy();
             }
         });
     }
@@ -57,16 +74,23 @@ export class PlayerController {
     }
 
     private walkOnUpdate() {
-        const speed = 5;
+        const speed =
+            this.cursors.shift.isDown &&
+            this.jumpingStateMachine.isCurrentState("idle")
+                ? 10
+                : 5;
         if (this.cursors.left.isDown) {
             this.sprite.setVelocityX(-speed);
             this.sprite.flipX = true;
-        } else if (this.cursors.right.isDown) {
+            return;
+        }
+        if (this.cursors.right.isDown) {
             this.sprite.setVelocityX(speed);
             this.sprite.flipX = false;
-        } else if (this.sprite.getVelocity().x === 0) {
-            this.walkingStateMachine.setState("idle");
+            return;
         }
+
+        this.walkingStateMachine.setState("idle");
     }
 
     private jumpIdleOnUpdate() {

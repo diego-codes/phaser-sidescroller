@@ -34,15 +34,26 @@
          "name":"objects",
          "objects":[
                 {
-                 "height":51.7742139158985,
+                 "height":70,
                  "id":3,
                  "name":"penguin-spawn",
                  "rotation":0,
                  "type":"",
                  "visible":true,
-                 "width":51.7742139158985,
-                 "x":708.422780654123,
-                 "y":429.347139790378
+                 "width":70,
+                 "x":700,
+                 "y":420
+                }, 
+                {
+                 "height":70,
+                 "id":7,
+                 "name":"star",
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":70,
+                 "x":210,
+                 "y":700
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -51,7 +62,7 @@
          "y":0
         }],
  "nextlayerid":3,
- "nextobjectid":4,
+ "nextobjectid":9,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.11.2",
