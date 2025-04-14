@@ -1,12 +1,18 @@
 import { StateMachine } from "../../StateMachine/StateMachine";
+import { ObstaclesController } from "../ObstaclesController";
+import { events as events } from "./EventCenter";
 
 export class PlayerController {
     private walkingStateMachine: StateMachine<PlayerController>;
     private jumpingStateMachine: StateMachine<PlayerController>;
 
+    private health = 100;
+
     constructor(
+        private scene: Phaser.Scene,
         private sprite: Phaser.Physics.Matter.Sprite,
-        private cursors: Phaser.Types.Input.Keyboard.CursorKeys
+        private cursors: Phaser.Types.Input.Keyboard.CursorKeys,
+        private obstacles: ObstaclesController
     ) {
         this.createAnimations();
         this.walkingStateMachine = new StateMachine(this, "player-walk");
@@ -28,18 +34,26 @@ export class PlayerController {
             .addState("jump", {
                 onEnter: this.jumpOnEnter,
             })
+            .addState("spike-hit", {
+                onEnter: this.spikeHitOnEnter,
+            })
             .setState("idle");
 
         this.sprite.setOnCollide((data: MatterJS.ICollisionPair) => {
             const body = data.bodyB as MatterJS.BodyType;
             const gameObject = body.gameObject;
 
+            if (this.obstacles.is("spikes", body)) {
+                this.jumpingStateMachine.setState("spike-hit");
+                return;
+            }
+
             if (!gameObject) {
                 return;
             }
 
             if (gameObject instanceof Phaser.Physics.Matter.TileBody) {
-                if (this.jumpingStateMachine.isCurrentState("jump")) {
+                if (!this.jumpingStateMachine.isCurrentState("idle")) {
                     this.jumpingStateMachine.setState("idle");
                 }
 
@@ -48,8 +62,24 @@ export class PlayerController {
 
             const sprite = gameObject as Phaser.Physics.Matter.Sprite;
             const type = sprite.getData("type");
-            if (type === "star") {
-                sprite.destroy();
+            switch (type) {
+                case "star": {
+                    events.emit("star-collected");
+                    sprite.destroy();
+                    break;
+                }
+
+                case "health": {
+                    const value = sprite.getData("healthPoints") ?? 10;
+                    this.health = Phaser.Math.Clamp(
+                        this.health + value,
+                        0,
+                        100
+                    );
+                    events.emit("health-changed", this.health);
+                    sprite.destroy();
+                    break;
+                }
             }
         });
     }
@@ -105,6 +135,42 @@ export class PlayerController {
 
     private jumpOnEnter() {
         this.sprite.setVelocityY(-15);
+    }
+
+    private spikeHitOnEnter() {
+        this.health = Phaser.Math.Clamp(this.health - 10, 0, 100);
+        events.emit("health-changed", this.health);
+        const negativeVelocity = this.sprite.getVelocity().x * -1;
+        this.sprite.setVelocity(negativeVelocity, -12);
+        const startColor = Phaser.Display.Color.ValueToColor(0xffffff);
+        const endColor = Phaser.Display.Color.ValueToColor(0xff0000);
+
+        this.scene.tweens.addCounter({
+            from: 0,
+            to: 100,
+            duration: 100,
+            repeat: 2,
+            yoyo: true,
+            ease: Phaser.Math.Easing.Sine.InOut,
+            onUpdate: (tween: Phaser.Tweens.Tween) => {
+                const value = tween.getValue();
+                const colorOjbect =
+                    Phaser.Display.Color.Interpolate.ColorWithColor(
+                        startColor,
+                        endColor,
+                        100,
+                        value
+                    );
+                const color = Phaser.Display.Color.GetColor(
+                    colorOjbect.r,
+                    colorOjbect.g,
+                    colorOjbect.b
+                );
+                this.sprite.setTint(color);
+            },
+        });
+
+        this.jumpingStateMachine.setState("idle");
     }
 
     private createAnimations() {
